@@ -7,7 +7,6 @@ from ud3tn_utils.aap2.generated import aap2_pb2
 from aiocoap.message import Message
 from aiocoap.numbers.codes import Code
 from aiocoap.numbers.types import Type
-from aiocoap import Context
 import asyncio
 
 # Address of the UD3TN node's AAP2 Unix domain socket
@@ -38,7 +37,6 @@ async def main(send_client, receive_client):
 # Asynchronous function to send CoAP messages via the AAP2 client
 async def chat_send(send_client):
     try:
-        protocol = await Context.create_client_context() # Create CoAP context
         while True:
             message = await aioconsole.ainput("Message or 'exit' to escape: ")
             if message.lower() == "exit":
@@ -66,7 +64,7 @@ async def chat_send(send_client):
                     payload = Message(
                         code=Code.PUT,
                         uri="coap://localhost/temperature",
-                        mtype=Type.NON,
+                        mtype=Type.CON,
                         mid=current_id,
                         payload=temperature.encode("utf-8")
                     )
@@ -109,15 +107,12 @@ async def chat_receive(receive_client):
             # Decode the payload as a CoAP message
             response = Message.decode(recv_payload)
             
-            status_code = response.code
-            mid = response.mid
-            token = response.token
-            
             print(f"Received Response:")
-            print(f"  Status Code: {status_code}")
-            print(f"  Message ID (MID): {mid}")
-            print(f"  Token: {token.hex() if token else 'None'}")
+            print(f"  Status Code: {response.code}")
+            print(f"  Message ID (MID): {response.mid}")
+            print(f"  Token: {response.token.hex() if response.token else 'None'}")
             print(f"  Payload: {response.payload}")
+            print(f"  Mtype: {response.mtype}")
             
             # Acknowledge successful receipt of the ADU to ud3tn
             await receive_client.send_response_status(aap2_pb2.ResponseStatus.RESPONSE_STATUS_SUCCESS)

@@ -18,15 +18,15 @@ make posix
 ## FOR EACH DEPLOYMENT, INSIDE THE UD3TN FOLDER RUN:
 
 ```bash
-build/posix/ud3tn --node-id dtn://a.dtn/ --aap-port 4242 --aap2-socket ud3tn-a.aap2.socket --cla "mtcp:*,4556"
+build/posix/ud3tn --node-id dtn://a.dtn/ --aap-port 4242 --aap2-socket ud3tn-a.aap2.socket --cla "tcpclv3:*,4556"
 ```
 
 ```bash
-build/posix/ud3tn --node-id dtn://b.dtn/ --aap-port 4243 --aap2-socket ud3tn-b.aap2.socket --cla "mtcp:*,4225"
+build/posix/ud3tn --node-id dtn://b.dtn/ --aap-port 4243 --aap2-socket ud3tn-b.aap2.socket --cla "tcpclv3:*,4225"
 ```
 
 ```bash
-build/posix/ud3tn --node-id dtn://c.dtn/ --aap-port 4244 --aap2-socket ud3tn-c.aap2.socket --cla "sqlite:ud3tn-c.sqlite;mtcp:*,4557" --external-dispatch
+build/posix/ud3tn --node-id dtn://c.dtn/ --aap-port 4244 --aap2-socket ud3tn-c.aap2.socket --cla "sqlite:ud3tn-c.sqlite;tcpclv3:*,4557" --external-dispatch
 ```
 
 ```bash
@@ -34,16 +34,16 @@ aap2-bdm-ud3tn-routing -vv --socket ud3tn-c.aap2.socket
 ```
 
 ```bash
-build/posix/ud3tn --node-id dtn://d.dtn/ --aap-port 4245 --aap2-socket ud3tn-d.aap2.socket --cla "mtcp:*,4558"
+build/posix/ud3tn --node-id dtn://d.dtn/ --aap-port 4245 --aap2-socket ud3tn-d.aap2.socket --cla "tcpclv3:*,4558"
 ```
 
 ```bash
-aap2-config --socket ud3tn-a.aap2.socket --schedule 1 600 100000 dtn://c.dtn/ --reaches dtn://b.dtn/ --reaches dtn://d.dtn/  mtcp:localhost:4557
-aap2-config --socket ud3tn-c.aap2.socket --schedule 30 600 100000 dtn://d.dtn/ --reaches dtn://b.dtn/ mtcp:localhost:4558 
-aap2-config --socket ud3tn-d.aap2.socket --schedule 1 600 100000 dtn://c.dtn/ --reaches dtn://a.dtn/ mtcp:localhost:4557
-aap2-config --socket ud3tn-d.aap2.socket --reaches dtn://b.dtn/rec --schedule 1 600 100000  dtn://b.dtn/ mtcp:localhost:4225
-aap2-config --socket ud3tn-c.aap2.socket --reaches dtn://a.dtn/rec --schedule 1 600 100000 dtn://a.dtn/ mtcp:localhost:4556 
-aap2-config --socket ud3tn-b.aap2.socket --schedule 1 600 100000 dtn://d.dtn/ --reaches dtn://c.dtn/ --reaches dtn://a.dtn/ mtcp:localhost:4558
+aap2-config --socket ud3tn-a.aap2.socket --schedule 1 600 100000 dtn://c.dtn/ --reaches dtn://b.dtn/ --reaches dtn://d.dtn/  tcpclv3:localhost:4557
+aap2-config --socket ud3tn-c.aap2.socket --schedule 30 600 100000 dtn://d.dtn/ --reaches dtn://b.dtn/ tcpclv3:localhost:4558 
+aap2-config --socket ud3tn-d.aap2.socket --schedule 1 600 100000 dtn://c.dtn/ --reaches dtn://a.dtn/ tcpclv3:localhost:4557
+aap2-config --socket ud3tn-d.aap2.socket --reaches dtn://b.dtn/rec --schedule 1 600 100000  dtn://b.dtn/ tcpclv3:localhost:4225
+aap2-config --socket ud3tn-c.aap2.socket --reaches dtn://a.dtn/rec --schedule 1 600 100000 dtn://a.dtn/ tcpclv3:localhost:4556 
+aap2-config --socket ud3tn-b.aap2.socket --schedule 1 600 100000 dtn://d.dtn/ --reaches dtn://c.dtn/ --reaches dtn://a.dtn/ tcpclv3:localhost:4558
 ```
 
 ```bash

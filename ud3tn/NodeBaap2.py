@@ -5,10 +5,9 @@ from ud3tn_utils.aap2.generated import aap2_pb2
 # Async/CoAP libraries
 import asyncio
 from aiocoap.message import Message
-from aiocoap.numbers.codes import Code
+from aiocoap.numbers.types import Type
 import aiocoap
 import aiocoap.resource as resource
-from aiocoap.numbers.contentformat import ContentFormat
 
 # ----------------------------
 # CoAP Resources Definitions
@@ -163,13 +162,18 @@ async def bundle_coap_server(receive_client, send_client, resources):
             # Echo back original CoAP metadata
             response.token = request.token
             response.mid = request.mid
-            response.mtype = request.mtype
+
+            if request.mtype == Type.NON:
+                response.mtype = Type.NON
+            else: 
+                response.mtype = Type.ACK
             
             # Send CoAP response wrapped in a Bundle Protocol ADU
             print("CoAP Response to be sent back:")
             print(f"  Code: {response.code}")
             print(f"  Token: {response.token.hex() if response.token else 'None'}")
             print(f"  Payload: {response.payload}")
+            print(f"  Mtype: {response.mtype}")
             
             payload = response.encode()
             await send_client.send_adu(
