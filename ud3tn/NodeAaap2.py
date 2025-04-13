@@ -10,11 +10,11 @@ from aiocoap.numbers.types import Type
 import asyncio
 
 # Address of the UD3TN node's AAP2 Unix domain socket
-SERVER_ADDRESS = 'ud3tn-a.aap2.socket' 
+CLIENT_ADDRESS = 'ud3tn-a.aap2.socket' 
 
 # Instantiate separate AAP2 clients for sending and receiving
-send_client = AAP2AsyncUnixClient(SERVER_ADDRESS)
-receive_client = AAP2AsyncUnixClient(SERVER_ADDRESS)
+send_client = AAP2AsyncUnixClient(CLIENT_ADDRESS)
+receive_client = AAP2AsyncUnixClient(CLIENT_ADDRESS)
 
 # CoAP Message ID tracking 
 MAX_ID = 65535  # Maximum message ID value
