@@ -4,6 +4,10 @@ import random
 import os
 from ud3tn_utils.aap2.aap2_client import AAP2AsyncUnixClient
 from ud3tn_utils.aap2.generated import aap2_pb2
+import sys
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'aiocoap', 'src'))
+sys.path.insert(0, project_root)
 from aiocoap.message import Message
 from aiocoap.numbers.codes import Code
 from aiocoap.numbers.types import Type
@@ -17,7 +21,7 @@ send_client = AAP2AsyncUnixClient(CLIENT_ADDRESS)
 receive_client = AAP2AsyncUnixClient(CLIENT_ADDRESS)
 
 # CoAP Message ID tracking 
-MAX_ID = 65535  # Maximum message ID value
+MAX_ID = 16777215  # Maximum message ID value
 MIN_ID = 1      # Minimum message ID value
 current_id = 1  # Starting message ID
 

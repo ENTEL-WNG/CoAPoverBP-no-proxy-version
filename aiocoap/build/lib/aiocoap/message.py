@@ -267,7 +267,11 @@ class Message(object):
     def decode(cls, rawdata, remote=None):
         """Create Message object from binary representation of message."""
         try:
-            (vttkl, code, mid) = struct.unpack("!BBH", rawdata[:4])
+            # Space CoAP Modifcation
+            #(vttkl, code, mid) = struct.unpack("!BBH", rawdata[:4])
+            vttkl = rawdata[0]
+            code = rawdata[1]
+            mid = int.from_bytes(rawdata[2:5], byteorder='big')
         except struct.error:
             raise error.UnparsableMessage("Incoming message too short for CoAP")
         version = (vttkl & 0xC0) >> 6
@@ -276,8 +280,12 @@ class Message(object):
         mtype = (vttkl & 0x30) >> 4
         token_length = vttkl & 0x0F
         msg = Message(mtype=mtype, mid=mid, code=code)
-        msg.token = rawdata[4 : 4 + token_length]
-        msg.payload = msg.opt.decode(rawdata[4 + token_length :])
+        # Space CoAP Modifcation
+        #msg.token = rawdata[4 : 4 + token_length]
+        msg.token = rawdata[5 : 5 + token_length]
+        # Space CoAP Modifcation
+        #msg.payload = msg.opt.decode(rawdata[4 + token_length :])
+        msg.payload = msg.opt.decode(rawdata[5 + token_length :])
         msg.remote = remote
         return msg
 
@@ -294,7 +302,10 @@ class Message(object):
                 + (len(self.token) & 0x0F)
             ]
         )
-        rawdata += struct.pack("!BH", self.code, self.mid)
+        # Space CoAP Modifcation
+        #rawdata += struct.pack("!BH", self.code, self.mid)
+        rawdata += struct.pack("!B", self.code)
+        rawdata += self.mid.to_bytes(3, byteorder='big')
         rawdata += self.token
         rawdata += self.opt.encode()
         if len(self.payload) > 0:

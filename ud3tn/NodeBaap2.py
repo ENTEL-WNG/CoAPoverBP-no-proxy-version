@@ -4,9 +4,13 @@ from ud3tn_utils.aap2.generated import aap2_pb2
 
 # Async/CoAP libraries
 import asyncio
+import sys
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'aiocoap', 'src'))
+sys.path.insert(0, project_root)
+import aiocoap
 from aiocoap.message import Message
 from aiocoap.numbers.types import Type
-import aiocoap
 import aiocoap.resource as resource
 
 # ----------------------------
