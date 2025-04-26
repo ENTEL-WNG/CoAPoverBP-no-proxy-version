@@ -40,64 +40,73 @@ async def main(send_client, receive_client):
 
 # Asynchronous function to send CoAP messages via the AAP2 client
 async def chat_send(send_client):
+    BUFFER_LIMIT = 5
+    TIMEOUT_SECONDS = 10
+
+    coap_buffer = []
+    flusher_task = None
+
+    async def flush_buffer():
+        nonlocal coap_buffer, flusher_task
+        if not coap_buffer:
+            return
+        aggregate_payload = b''.join(coap_buffer)
+        await send_client.send_adu(
+            aap2_pb2.BundleADU(
+                dst_eid="dtn://b.dtn/rec",
+                payload_length=len(aggregate_payload),
+            ),
+            aggregate_payload,
+        )
+        print(f"Sent aggregated bundle with {len(coap_buffer)} CoAP messages")
+        coap_buffer.clear()
+        if flusher_task:
+            flusher_task.cancel()
+            flusher_task = None
+
+    async def start_flusher():
+        await asyncio.sleep(TIMEOUT_SECONDS)
+        await flush_buffer()
+
     try:
+
         while True:
             message = await aioconsole.ainput("Message or 'exit' to escape: ")
+
             if message.lower() == "exit":
+                await flush_buffer()
                 break
             else:
-                # Construct CoAP message based on input
-                if message.lower() == "get":
-                    payload = Message(
-                        code=Code.GET,
-                        uri="coap://localhost/temperature",
-                        mtype=Type.NON,
-                        mid=current_id
-                    )
-                elif message.lower() == "get all":
-                    payload = Message(
-                        code=Code.GET,
-                        uri="coap://localhost/temperature?all",
-                        mtype=Type.NON,
-                        mid=current_id
-                    )
-                    payload.opt.uri_query = ["all"]
-                else:
-                    # Send a random temperature reading using PUT
-                    temperature = str(round(random.uniform(10, 30), 2))
-                    payload = Message(
-                        code=Code.PUT,
-                        uri="coap://localhost/temperature",
-                        mtype=Type.CON,
-                        mid=current_id,
-                        payload=temperature.encode("utf-8")
-                    )
-                
-                # Set a random 2-byte token for matching responses
+                # Build CoAP message
+                temperature = str(round(random.uniform(10, 30), 2))
+                payload = Message(
+                    code=Code.PUT,
+                    uri="coap://localhost/temperature",
+                    mtype=Type.NON,
+                    mid=current_id,
+                    payload=temperature.encode("utf-8")
+                )
+                payload.opt.payload_length = len(payload.payload)
                 payload.token = os.urandom(2)
-                
-                # Move to next message ID (wrap around if needed)
                 next_mid()
-                
-                # Encode CoAP message into bytes
+
                 p = payload.encode()
 
-                # Send it wrapped in a Bundle ADU to the destination EID
-                await send_client.send_adu(
-                    aap2_pb2.BundleADU(
-                        dst_eid="dtn://b.dtn/rec",
-                        payload_length=len(p),
-                    ),
-                    p,
-                )
-                
-                print("CoAP Message:", payload)
-                print("Encoded:", p)
-                
-                # Wait for a response from ud3tn agent
-                response = await send_client.receive_response()
-                print("Response:", response)
+                # Add to buffer
+                coap_buffer.append(p)
+                print(f"Queued CoAP Message MID={payload.mid}, Token={payload.token.hex()}")
+
+                # Start flusher if needed
+                if not flusher_task:
+                    flusher_task = asyncio.create_task(start_flusher())
+
+                # Flush immediately if buffer limit reached
+                if len(coap_buffer) >= BUFFER_LIMIT:
+                    await flush_buffer()
+
     finally:
+        if flusher_task:
+            flusher_task.cancel()
         await send_client.disconnect()
 
 # Asynchronous function to receive ADUs from the Bundle Protocol, decode the payload as CoAP

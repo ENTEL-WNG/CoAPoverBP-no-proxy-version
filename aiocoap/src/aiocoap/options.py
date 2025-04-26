@@ -257,3 +257,5 @@ class Options(object):
     )
     edhoc = _empty_presence_view(OptionNumber.EDHOC)
     size2 = _single_value_view(OptionNumber.SIZE2)
+    # experimental for draft-gomez-core-coap-bp-03
+    payload_length = _single_value_view(OptionNumber.PAYLOAD_LENGTH)

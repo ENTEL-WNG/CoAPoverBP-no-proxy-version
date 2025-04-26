@@ -62,6 +62,10 @@ class OptionNumber(ExtensibleIntEnum):
     # going to be used in overhead comparisons.
     REQUEST_HASH = 548
 
+    # experimental for draft-gomez-core-coap-bp-03
+    PAYLOAD_LENGTH = 65000  # Temporary number, picked >65000 to avoid collisions
+
+
     @property
     def OBJECT_SECURITY(self):
         warnings.warn("OBJECT_SECURITY is a deprecated alias for OSCORE")
@@ -203,3 +207,7 @@ OptionNumber.HOP_LIMIT.set_format(optiontypes.UintOption)
 # experimental for draft-amsuess-core-cachable-oscore
 
 OptionNumber.REQUEST_HASH.set_format(optiontypes.OpaqueOption)
+
+# experimental for draft-gomez-core-coap-bp-03
+OptionNumber.PAYLOAD_LENGTH.set_format(optiontypes.UintOption)
+

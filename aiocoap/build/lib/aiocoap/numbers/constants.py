@@ -52,15 +52,21 @@ class TransportTuning:
     #   | PROBING_RATE      | 1 Byte/second |
     #   +-------------------+---------------+
 
-    ACK_TIMEOUT = 2.0
+    # experimental for draft-gomez-core-coap-bp-03
+    ACK_TIMEOUT = 2642
+    #ACK_TIMEOUT = 2.0
     """The time, in seconds, to wait for an acknowledgement of a
     confirmable message. The inter-transmission time doubles
     for each retransmission."""
 
-    ACK_RANDOM_FACTOR = 1.5
+    # experimental for draft-gomez-core-coap-bp-03
+    ACK_RANDOM_FACTOR = 1.0
+    #ACK_RANDOM_FACTOR = 1.5
     """Timeout multiplier for anti-synchronization."""
 
-    MAX_RETRANSMIT = 4
+    # experimental for draft-gomez-core-coap-bp-03
+    MAX_RETRANSMIT = 0
+    #MAX_RETRANSMIT = 4
     """The number of retransmissions of confirmable messages to
     non-multicast endpoints before the infrastructure assumes no
     acknowledgement will be received."""

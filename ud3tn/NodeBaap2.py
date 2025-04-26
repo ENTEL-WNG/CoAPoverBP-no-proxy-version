@@ -18,23 +18,9 @@ import aiocoap.resource as resource
 # ----------------------------
 
 class TemperatureResource(resource.Resource):
-    """CoAP resource to GET latest/all temperatures or PUT new readings."""
     def __init__(self):
         super().__init__()
         self.temperatures = []
-        
-    async def render_get(self, request):
-        if "all" in request.opt.uri_query:
-            print("GET all")
-            payload = ", ".join(map(str, self.temperatures)).encode("utf-8")
-        else:
-            print("GET 1")
-            payload = (
-                str(self.temperatures[-1]).encode("utf-8")
-                if self.temperatures
-                else b"No temperatures recorded."
-            )
-        return aiocoap.Message(payload=payload)
         
     async def render_put(self, request):
         try:
@@ -46,42 +32,9 @@ class TemperatureResource(resource.Resource):
             return aiocoap.Message(code=aiocoap.BAD_REQUEST, payload=b"Invalid temperature.")
 
 class DummyPOST(resource.Resource):
-    """A placeholder POST-only CoAP resource."""
     def __init__(self):
         super().__init__()
-        
-    async def render_post(self, request):
-        print(request)
-        return aiocoap.Message(code=aiocoap.CHANGED, payload=b"POST.")
 
-class DynamicResourceCreator(resource.Resource):
-    """Creates new resources dynamically based on POSTed requests."""
-    def __init__(self, root_site):
-        super().__init__()
-        self.root_site = root_site
-        
-    async def render_post(self, request):
-        resource_id = request.opt.uri_path[-1]
-        if resource_id in self.root_site._resources:
-            return aiocoap.Message(payload=b"The resource already exists.", code=aiocoap.FORBIDDEN)
-        payload = request.payload.decode('utf-8')
-        new_resource = DynamicResource(initial_data=payload)
-        self.root_site.add_resource((resource_id,), new_resource)
-        return aiocoap.Message(payload=f"Resource '{resource_id}' created.".encode('utf-8'), code=aiocoap.CREATED)
-
-class DynamicResource(resource.Resource):
-    """A generic CoAP resource whose data can be extended via POST."""
-    def __init__(self, initial_data=""):
-        super().__init__()
-        self.data = initial_data
-        
-    async def render_get(self, request):
-        return aiocoap.Message(payload=self.data.encode('utf-8'), code=aiocoap.CONTENT)
-        
-    async def render_post(self, request):
-        payload = request.payload.decode('utf-8')
-        self.data += f"\n{payload}"
-        return aiocoap.Message(payload=b"Data added.", code=aiocoap.CHANGED)
     
 # ----------------------------
 # AAP2 + CoAP Server Handling
@@ -115,82 +68,79 @@ async def bundle_coap_server(receive_client, send_client, resources):
     """Main loop: receive CoAP requests over BP, dispatch to resources, send responses."""
     try:
         while True:
-            # Wait for incoming CoAP-over-BP ADU
             adu_msg, recv_payload = await receive_client.receive_adu()
-            print(f"Received ADU from {adu_msg.src_eid}: {recv_payload}")
+            print(f"Received ADU from {adu_msg.src_eid}: {len(recv_payload)} bytes")
 
-            # Acknowledge receipt to ud3tn
             await receive_client.send_response_status(
                 aap2_pb2.ResponseStatus.RESPONSE_STATUS_SUCCESS
             )
 
-            # Decode the CoAP message from the received payload
-            request = Message.decode(recv_payload)
-            print(f"Decoded CoAP request: {request}")
-            
-            path = request.opt.uri_path
-            resource_name = path[0] if path else ''
-            
-            print(f"Accessing resource: '{resource_name}'")
-            
-            # Dispatch based on URI path
-            if resource_name in resources:
-                resource = resources[resource_name]
-                
-                # Choose appropriate method handler
-                if request.code == aiocoap.GET:
-                    handler = resource.render_get
-                elif request.code == aiocoap.PUT:
-                    handler = resource.render_put
-                elif request.code == aiocoap.POST:
-                    handler = resource.render_post
-                else:
-                    response = aiocoap.Message(code=aiocoap.METHOD_NOT_ALLOWED, 
-                                             payload=f"Method not allowed".encode('utf-8'))
-                    handler = None
-                
-                # Call the resource method and build response
-                if handler:
-                    try:
-                        response = await handler(request)
-                    except Exception as e:
-                        print(f"Error processing request: {e}")
-                        response = aiocoap.Message(code=aiocoap.INTERNAL_SERVER_ERROR, 
-                                                 payload=f"Internal server error: {str(e)}".encode('utf-8'))
-            else:
-                # Unknown resource path
-                print(f"Resource not found: {resource_name}")
-                response = aiocoap.Message(code=aiocoap.NOT_FOUND, 
-                                         payload=f"Resource not found: {resource_name}".encode('utf-8'))
-            
-            # Echo back original CoAP metadata
-            response.token = request.token
-            response.mid = request.mid
+            offset = 0
+            while offset < len(recv_payload):
+                partial = recv_payload[offset:]
+                try:
+                    msg = Message.decode(partial)
 
-            if request.mtype == Type.NON:
-                response.mtype = Type.NON
-            else: 
-                response.mtype = Type.ACK
-            
-            # Send CoAP response wrapped in a Bundle Protocol ADU
-            print("CoAP Response to be sent back:")
-            print(f"  Code: {response.code}")
-            print(f"  Token: {response.token.hex() if response.token else 'None'}")
-            print(f"  Payload: {response.payload}")
-            print(f"  Mtype: {response.mtype}")
-            
-            payload = response.encode()
-            await send_client.send_adu(
-                aap2_pb2.BundleADU(
-                    dst_eid="dtn://a.dtn/rec", # Send it back to the original CoAP client
-                    payload_length=len(payload)
-                ),
-                payload,
-            )
+                    if not msg.opt.payload_length:
+                        raise ValueError("Missing Payload-Length option in incoming CoAP message")
 
-            # Wait for confirmation from ud3tn
-            resp = await send_client.receive_response()
-            print("Send status:", resp)
+                    payload_length = msg.opt.payload_length
+
+                    encoded = msg.encode()
+                    payload_marker_index = encoded.find(b'\xFF')
+                    if payload_marker_index == -1:
+                        raise ValueError("Payload Marker (0xFF) not found!")
+
+                    full_message_length = payload_marker_index + 1 + payload_length
+
+                    coap_bytes = recv_payload[offset:offset + full_message_length]
+                    offset += full_message_length
+
+                    # Decode full message now
+                    request = Message.decode(coap_bytes)
+
+                    print(f"Parsed CoAP request: MID={request.mid} Token={request.token.hex()} Code={request.code} Payload Length={request.opt.payload_length}")
+
+                    path = request.opt.uri_path
+                    resource_name = path[0] if path else ''
+
+                    # Dispatch to resource
+                    if resource_name in resources:
+                        resource = resources[resource_name]
+                        if request.code == aiocoap.PUT:
+                            handler = resource.render_put
+                        else:
+                            response = aiocoap.Message(code=aiocoap.METHOD_NOT_ALLOWED, payload=b"Method not allowed")
+                            handler = None
+
+                        if handler:
+                            try:
+                                response = await handler(request)
+                            except Exception as e:
+                                print(f"Error during resource handling: {e}")
+                                response = aiocoap.Message(code=aiocoap.INTERNAL_SERVER_ERROR, payload=b"Internal server error")
+
+                    else:
+                        response = aiocoap.Message(code=aiocoap.NOT_FOUND, payload=b"Resource not found")
+
+                    # Set metadata from original request
+                    response.token = request.token
+                    response.mid = request.mid
+                    response.mtype = Type.ACK if request.mtype != Type.NON else Type.NON
+
+                    payload = response.encode()
+                    await send_client.send_adu(
+                        aap2_pb2.BundleADU(
+                            dst_eid="dtn://a.dtn/rec",
+                            payload_length=len(payload)
+                        ),
+                        payload,
+                    )
+                    await send_client.receive_response()
+
+                except Exception as e:
+                    print(f"Failed to parse CoAP message from aggregation: {e}")
+                    break
 
     finally:
         await receive_client.disconnect()
