@@ -104,7 +104,9 @@ class TransportTuning:
             * self.ACK_RANDOM_FACTOR
         )
 
-    MAX_LATENCY = 100.0
+    # experimental for draft-gomez-core-coap-bp-03
+    MAX_LATENCY = 10000.0
+    #MAX_LATENCY = 100.0
     """Maximum time a datagram is expected to take from the start
     of its transmission to the completion of its reception."""
 
