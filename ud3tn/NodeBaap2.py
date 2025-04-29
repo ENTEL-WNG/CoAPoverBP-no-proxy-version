@@ -1,11 +1,12 @@
-# AAP2 client libraries and definitions
-from ud3tn_utils.aap2.aap2_client import AAP2AsyncUnixClient 
-from ud3tn_utils.aap2.generated import aap2_pb2
-
-# Async/CoAP libraries
+# Imports
 import asyncio
 import sys
 import os
+import json
+
+from ud3tn_utils.aap2.aap2_client import AAP2AsyncUnixClient
+from ud3tn_utils.aap2.generated import aap2_pb2
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'aiocoap', 'src'))
 sys.path.insert(0, project_root)
 import aiocoap
@@ -14,58 +15,105 @@ from aiocoap.numbers.types import Type
 import aiocoap.resource as resource
 
 # ----------------------------
-# CoAP Resources Definitions
-# ----------------------------
-
-class TemperatureResource(resource.Resource):
-    def __init__(self):
-        super().__init__()
-        self.temperatures = []
-        
-    async def render_put(self, request):
-        try:
-            temperature = float(request.payload.decode("utf-8"))
-            self.temperatures.append(temperature)
-            print(f"Received temperature: {temperature}")
-            return aiocoap.Message(code=aiocoap.CHANGED, payload=b"Temperature recorded.")
-        except ValueError:
-            return aiocoap.Message(code=aiocoap.BAD_REQUEST, payload=b"Invalid temperature.")
-
-class DummyPOST(resource.Resource):
-    def __init__(self):
-        super().__init__()
-
-    
-# ----------------------------
-# AAP2 + CoAP Server Handling
+# Global Variables
 # ----------------------------
 
 SERVER_ADDRESS = 'ud3tn-b.aap2.socket'
+DATABASE_FILE = 'resources.json'
+resources = {}
 
-# Instantiate AAP2 clients for send and receive roles
+# ----------------------------
+# Helper functions for JSON database
+# ----------------------------
+
+def save_resources_to_file():
+    data_to_save = {name: resource.data for name, resource in resources.items()}
+    with open(DATABASE_FILE, 'w') as f:
+        json.dump(data_to_save, f)
+    print("Database saved to", DATABASE_FILE)
+
+def load_resources_from_file():
+    if not os.path.exists(DATABASE_FILE):
+        print("No database file found, starting fresh.")
+        return
+
+    with open(DATABASE_FILE, 'r') as f:
+        loaded_data = json.load(f)
+        for name, data in loaded_data.items():
+            resources[name] = DynamicResource(initial_data=data)
+    print("Database loaded from", DATABASE_FILE)
+
+# ----------------------------
+# CoAP Resource Class
+# ----------------------------
+
+class DynamicResource(resource.Resource):
+    def __init__(self, initial_data=None):
+        super().__init__()
+        if initial_data is None:
+            initial_data = {'values': []}  # Always a list!
+        self.data = initial_data
+
+    async def render_get(self, request):
+        payload = str(self.data['values']).encode('utf-8')
+        return aiocoap.Message(code=aiocoap.CONTENT, payload=payload)
+
+    async def render_put(self, request):
+        try:
+            value = request.payload.decode('utf-8')
+            self.data['values'].append(value)
+            save_resources_to_file()
+            return aiocoap.Message(code=aiocoap.CHANGED, payload=b"Value appended.")
+        except Exception as e:
+            print("PUT error:", e)
+            return aiocoap.Message(code=aiocoap.BAD_REQUEST, payload=b"Invalid PUT payload.")
+
+    async def render_delete(self, request):
+        self.data['values'].clear()
+        save_resources_to_file()
+        return aiocoap.Message(code=aiocoap.DELETED, payload=b"Resource values cleared.")
+
+# ----------------------------
+# POST Handler (to create new resources)
+# ----------------------------
+
+async def handle_post(request):
+    try:
+        name = request.payload.decode('utf-8').strip()
+
+        if not name:
+            return aiocoap.Message(code=aiocoap.BAD_REQUEST, payload=b"Missing resource name.")
+
+        if name in resources:
+            return aiocoap.Message(code=aiocoap.BAD_REQUEST, payload=b"Resource already exists.")
+
+        resources[name] = DynamicResource()
+        save_resources_to_file()
+
+        print(f"Created new resource: /{name}")
+        return aiocoap.Message(code=aiocoap.CREATED, payload=f"Created {name}".encode('utf-8'))
+
+    except Exception as e:
+        print("POST error:", e)
+        return aiocoap.Message(code=aiocoap.BAD_REQUEST, payload=b"Invalid POST payload.")
+
+# ----------------------------
+# Main CoAP over BP Server
+# ----------------------------
+
 send_client = AAP2AsyncUnixClient(SERVER_ADDRESS)
 receive_client = AAP2AsyncUnixClient(SERVER_ADDRESS)
 
-# Resource table for handling requests by URI path
-resources = {}
-
 async def main():
-    # Register static CoAP resources
-    temp_resource = TemperatureResource()
-    post_resource = DummyPOST()
-    
-    resources['temperature'] = temp_resource
-    resources[''] = post_resource  # Fallback or root path resource
-    
+    load_resources_from_file()
+
     async with send_client, receive_client:
         await send_client.configure(agent_id='snd')
         await receive_client.configure(agent_id='rec', subscribe=True)
         
-        # Start main CoAP-over-BP handling loop
-        await bundle_coap_server(receive_client, send_client, resources)
+        await bundle_coap_server(receive_client, send_client)
 
-async def bundle_coap_server(receive_client, send_client, resources):
-    """Main loop: receive CoAP requests over BP, dispatch to resources, send responses."""
+async def bundle_coap_server(receive_client, send_client):
     try:
         while True:
             adu_msg, recv_payload = await receive_client.receive_adu()
@@ -92,11 +140,9 @@ async def bundle_coap_server(receive_client, send_client, resources):
                         raise ValueError("Payload Marker (0xFF) not found!")
 
                     full_message_length = payload_marker_index + 1 + payload_length
-
                     coap_bytes = recv_payload[offset:offset + full_message_length]
                     offset += full_message_length
 
-                    # Decode full message now
                     request = Message.decode(coap_bytes)
 
                     print(f"Parsed CoAP request: MID={request.mid} Token={request.token.hex()} Code={request.code} Payload Length={request.opt.payload_length}")
@@ -104,26 +150,33 @@ async def bundle_coap_server(receive_client, send_client, resources):
                     path = request.opt.uri_path
                     resource_name = path[0] if path else ''
 
-                    # Dispatch to resource
                     if resource_name in resources:
                         resource = resources[resource_name]
                         if request.code == aiocoap.PUT:
-                            handler = resource.render_put
+                            handler = getattr(resource, 'render_put', None)
+                        elif request.code == aiocoap.GET:
+                            handler = getattr(resource, 'render_get', None)
+                        elif request.code == aiocoap.DELETE:
+                            handler = getattr(resource, 'render_delete', None)
                         else:
-                            response = aiocoap.Message(code=aiocoap.METHOD_NOT_ALLOWED, payload=b"Method not allowed")
                             handler = None
 
                         if handler:
                             try:
                                 response = await handler(request)
                             except Exception as e:
-                                print(f"Error during resource handling: {e}")
+                                print("Error during resource handling:", e)
                                 response = aiocoap.Message(code=aiocoap.INTERNAL_SERVER_ERROR, payload=b"Internal server error")
-
+                        else:
+                            response = aiocoap.Message(code=aiocoap.METHOD_NOT_ALLOWED, payload=b"Method not allowed")
                     else:
-                        response = aiocoap.Message(code=aiocoap.NOT_FOUND, payload=b"Resource not found")
+                        # No resource found
+                        if request.code == aiocoap.POST:
+                            response = await handle_post(request)
+                        else:
+                            response = aiocoap.Message(code=aiocoap.NOT_FOUND, payload=b"Resource not found")
 
-                    # Set metadata from original request
+                    # Metadata
                     response.token = request.token
                     response.mid = request.mid
                     response.mtype = Type.ACK if request.mtype != Type.NON else Type.NON
@@ -139,13 +192,16 @@ async def bundle_coap_server(receive_client, send_client, resources):
                     await send_client.receive_response()
 
                 except Exception as e:
-                    print(f"Failed to parse CoAP message from aggregation: {e}")
+                    print("Failed to parse CoAP message:", e)
                     break
 
     finally:
         await receive_client.disconnect()
         await send_client.disconnect()
 
-# Run main entry point
+# ----------------------------
+# Entry Point
+# ----------------------------
+
 if __name__ == "__main__":
     asyncio.run(main())
