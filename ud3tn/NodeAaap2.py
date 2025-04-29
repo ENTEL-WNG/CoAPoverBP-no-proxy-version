@@ -92,7 +92,7 @@ async def chat_send(send_client):
 
                 payload = Message(
                     code=Code.POST,
-                    uri="coap://b.dtn.arpa/",
+                    uri="coap://b.dtn.arpa/", # This does not actually work in the non-proxy case, because we dont use UDP
                     mtype=Type.NON,
                     mid=current_id,
                     payload=resource_name.encode('utf-8')
