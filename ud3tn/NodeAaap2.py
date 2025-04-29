@@ -80,7 +80,7 @@ async def chat_send(send_client):
 
     try:
         while True:
-            print("\nCommands: post, put, get, delete, exit")
+            print("Commands: post, put, get, delete, exit")
             command = await aioconsole.ainput("Enter command: ")
 
             if command.lower() == "exit":
@@ -92,7 +92,7 @@ async def chat_send(send_client):
 
                 payload = Message(
                     code=Code.POST,
-                    uri="coap://localhost/",
+                    uri="coap://b.dtn.arpa/",
                     mtype=Type.NON,
                     mid=current_id,
                     payload=resource_name.encode('utf-8')
@@ -104,7 +104,7 @@ async def chat_send(send_client):
 
                 payload = Message(
                     code=Code.PUT,
-                    uri=f"coap://localhost/{resource_name}",
+                    uri=f"coap://b.dtn.arpa/{resource_name}",
                     mtype=Type.NON,
                     mid=current_id,
                     payload=value.encode('utf-8')
@@ -115,7 +115,7 @@ async def chat_send(send_client):
 
                 payload = Message(
                     code=Code.GET,
-                    uri=f"coap://localhost/{resource_name}",
+                    uri=f"coap://b.dtn.arpa/{resource_name}",
                     mtype=Type.NON,
                     mid=current_id,
                     payload=b"get"
@@ -126,7 +126,7 @@ async def chat_send(send_client):
 
                 payload = Message(
                     code=Code.DELETE,
-                    uri=f"coap://localhost/{resource_name}",
+                    uri=f"coap://b.dtn.arpa/{resource_name}",
                     mtype=Type.NON,
                     mid=current_id,
                     payload=b"delete"
