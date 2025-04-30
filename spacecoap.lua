@@ -1,9 +1,9 @@
--- Space CoAP Lua Dissector (CoAP with 24-bit Message ID)
+-- Space CoAP Lua Dissector (CoAP with 24-bit Message ID and payload_length option)
 
 -- Define the new protocol
 local spacecoap_proto = Proto("spacecoap", "Space CoAP Protocol")
 
--- Value string tables for types and codes (for human‑readable display)
+-- Value string tables for types and codes (for human-readable display in Wireshark)
 local coap_type_names = {
   [0] = "Confirmable (CON)",
   [1] = "Non-confirmable (NON)",
@@ -41,7 +41,7 @@ local coap_code_names = {
   [165] = "5.05 Proxying Not Supported"
 }
 
--- Protocol fields
+-- Define protocol fields for Wireshark's dissection tree
 local f = spacecoap_proto.fields
 f.version            = ProtoField.uint8  ("spacecoap.version",            "Version",           base.DEC, nil, 0xC0)
 f.type               = ProtoField.uint8  ("spacecoap.type",               "Type",              base.DEC, coap_type_names, 0x30)
@@ -50,7 +50,7 @@ f.code               = ProtoField.uint8  ("spacecoap.code",               "Code"
 f.mid                = ProtoField.uint24 ("spacecoap.mid",                "Message ID",        base.DEC)         -- 24‑bit MID
 f.token              = ProtoField.bytes  ("spacecoap.token",              "Token")
 f.payload            = ProtoField.bytes  ("spacecoap.payload",            "Payload")
--- Common options
+-- CoAP option fields
 f.opt_if_match       = ProtoField.bytes  ("spacecoap.opt.if_match",       "If-Match")
 f.opt_uri_host       = ProtoField.string ("spacecoap.opt.uri_host",       "Uri-Host")
 f.opt_etag           = ProtoField.bytes  ("spacecoap.opt.etag",           "ETag")
@@ -70,11 +70,9 @@ f.opt_size2          = ProtoField.uint32 ("spacecoap.opt.size2",          "Size2
 f.opt_proxy_uri      = ProtoField.string ("spacecoap.opt.proxy_uri",      "Proxy-URI")
 f.opt_proxy_scheme   = ProtoField.string ("spacecoap.opt.proxy_scheme",   "Proxy-Scheme")
 f.opt_size1          = ProtoField.uint32 ("spacecoap.opt.size1",          "Size1")
--- Payload Length
 f.opt_payload_length = ProtoField.uint32("spacecoap.opt.payload_length", "Payload-Length")
 
-
--- Known content-format values (for display)
+-- Known CoAP content formats for display 
 local content_format_names = {
   [0]  = "text/plain",
   [40] = "application/link-format",
@@ -89,31 +87,23 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
   local length = buffer:len()
   if length < 5 then return 0 end
 
-  -- Byte 0: version (bits 7–6), type (5–4), tkl (3–0)
   local b0       = buffer(0,1):uint()
-  local version  = math.floor(b0 / 64)       -- >> 6
-  if version ~= 1 then return 0 end          -- not CoAP v1
-  local type_val     = math.floor((b0 % 64) / 16)  -- (b0 & 0x30) >> 4
-  local token_length =  b0 % 16                   -- b0 & 0x0F
+  local version  = math.floor(b0 / 64) 
+  if version ~= 1 then return 0 end 
 
-  -- Byte 1: code
+  local type_val     = math.floor((b0 % 64) / 16) 
+  local token_length =  b0 % 16 
   local code_val = buffer(1,1):uint()
   local code_str = coap_code_names[code_val] or string.format("0x%02X", code_val)
-
-  -- Bytes 2–4: 24‑bit Message ID
   local mid_val = buffer(2,3):uint()
 
-  -- Update columns (including MID and Token)
   pinfo.cols.protocol = "Space CoAP"
 
-  -- Prepare Token string (hex) or “<none>”
   local token_str = "<none>"
   if token_length > 0 then
-    -- token always starts at offset 5
     token_str = buffer(5, token_length):bytes():tohex()
   end
   
-  -- Include Type, Code, MID and Token in the Info column
   pinfo.cols.info = string.format(
     "%s, %s, MID=%d, Token=%s",
     coap_type_names[type_val],
@@ -122,7 +112,6 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
     token_str
   )
 
-  -- Build tree
   local subtree = tree:add(spacecoap_proto, buffer(), "Space CoAP")
   subtree:add(f.version, buffer(0,1))
   subtree:add(f.type,    buffer(0,1))
@@ -130,7 +119,6 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
   subtree:add(f.code,    buffer(1,1))
   subtree:add(f.mid,     buffer(2,3))
 
-  -- Token
   local offset = 5
   if token_length > 0 then
     if token_length > 8 or offset + token_length > length then
@@ -142,20 +130,19 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
     offset = offset + token_length
   end
 
-  -- Options
   local last_opt = 0
+
   if offset < length and buffer(offset,1):uint() ~= 0xFF then
     local opts_t = subtree:add(spacecoap_proto, buffer(offset), "Options")
+
     while offset < length do
       local hdr = buffer(offset,1):uint()
       if hdr == 0xFF then break end
       offset = offset + 1
 
-      -- delta = hdr >> 4, len = hdr & 0x0F
       local opt_delta = math.floor(hdr / 16)
       local opt_len   = hdr % 16
 
-      -- extended delta
       if opt_delta == 13 then
         opt_delta = buffer(offset,1):uint() + 13; offset = offset + 1
       elseif opt_delta == 14 then
@@ -165,7 +152,7 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
           "Invalid option delta=15")
         opt_delta = 0
       end
-      -- extended length
+
       if opt_len == 13 then
         opt_len = buffer(offset,1):uint() + 13; offset = offset + 1
       elseif opt_len == 14 then
@@ -188,7 +175,6 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
       local val = buffer(offset, opt_len)
       offset = offset + opt_len
 
-      -- Well‑known options
       if     opt_num == 1  then opts_t:add(f.opt_if_match,       val)
       elseif opt_num == 3  then opts_t:add(f.opt_uri_host,       val)
       elseif opt_num == 4  then opts_t:add(f.opt_etag,           val)
@@ -206,7 +192,6 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
       elseif opt_num == 17 then opts_t:add(f.opt_accept,         val)
       elseif opt_num == 20 then opts_t:add(f.opt_location_query, val)
       elseif opt_num == 23 then
-        -- Block2: top 4 bits = num, next bit = M, low 3 bits = szx
         local raw = val:uint()
         local blk_num = math.floor(raw / 16)
         local rem4    = raw % 16
@@ -236,7 +221,6 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
     end
   end
 
-  -- Payload
   if offset < length and buffer(offset,1):uint() == 0xFF then
     offset = offset + 1
   end
@@ -247,12 +231,12 @@ function spacecoap_proto.dissector(buffer, pinfo, tree)
   return length
 end
 
--- Register on standard CoAP ports
+-- Register protocol for standard CoAP ports
 local udp_table = DissectorTable.get("udp.port")
 udp_table:add(5683, spacecoap_proto)
 udp_table:add(5684, spacecoap_proto)
 
--- Heuristic for non‑standard ports
+-- Heuristic dissector to detect SpaceCoAP on unknown ports
 local function spacecoap_heuristic(buffer, pinfo, tree)
   if buffer:len() < 5 then return false end
   local b0 = buffer(0,1):uint()

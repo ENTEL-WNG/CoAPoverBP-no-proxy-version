@@ -267,7 +267,7 @@ class Message(object):
     def decode(cls, rawdata, remote=None):
         """Create Message object from binary representation of message."""
         try:
-            # Space CoAP Modifcation
+            # experimental for draft-gomez-core-coap-bp-03
             #(vttkl, code, mid) = struct.unpack("!BBH", rawdata[:4])
             vttkl = rawdata[0]
             code = rawdata[1]
@@ -280,10 +280,10 @@ class Message(object):
         mtype = (vttkl & 0x30) >> 4
         token_length = vttkl & 0x0F
         msg = Message(mtype=mtype, mid=mid, code=code)
-        # Space CoAP Modifcation
+        # experimental for draft-gomez-core-coap-bp-03
         #msg.token = rawdata[4 : 4 + token_length]
         msg.token = rawdata[5 : 5 + token_length]
-        # Space CoAP Modifcation
+        # experimental for draft-gomez-core-coap-bp-03
         #msg.payload = msg.opt.decode(rawdata[4 + token_length :])
         msg.payload = msg.opt.decode(rawdata[5 + token_length :])
         msg.remote = remote
@@ -302,7 +302,7 @@ class Message(object):
                 + (len(self.token) & 0x0F)
             ]
         )
-        # Space CoAP Modifcation
+        # experimental for draft-gomez-core-coap-bp-03
         #rawdata += struct.pack("!BH", self.code, self.mid)
         rawdata += struct.pack("!B", self.code)
         rawdata += self.mid.to_bytes(3, byteorder='big')
