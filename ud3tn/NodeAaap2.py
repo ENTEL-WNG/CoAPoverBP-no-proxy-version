@@ -1,4 +1,3 @@
-# Imports
 import asyncio
 import aioconsole
 import random
@@ -8,38 +7,29 @@ import sys
 from ud3tn_utils.aap2.aap2_client import AAP2AsyncUnixClient
 from ud3tn_utils.aap2.generated import aap2_pb2
 
+# Add aiocoap source to path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'aiocoap', 'src'))
 sys.path.insert(0, project_root)
+
 import aiocoap
 from aiocoap.message import Message
 from aiocoap.numbers.codes import Code
 from aiocoap.numbers.types import Type
 
-# ----------------------------
-# Configuration
-# ----------------------------
-
 CLIENT_ADDRESS = 'ud3tn-a.aap2.socket'
 MAX_ID = 16777215
 current_id = 1
 
-# Instantiate clients
 send_client = AAP2AsyncUnixClient(CLIENT_ADDRESS)
 receive_client = AAP2AsyncUnixClient(CLIENT_ADDRESS)
 
-# ----------------------------
-# Helper Functions
-# ----------------------------
-
 def next_mid():
+    """Generate the next message ID."""
     global current_id
     current_id = (current_id % MAX_ID) + 1
 
-# ----------------------------
-# Main Async Functions
-# ----------------------------
-
 async def main(send_client, receive_client):
+    """Start chat send/receive coroutines."""
     async with send_client, receive_client:
         await send_client.configure(agent_id='snd')
         await receive_client.configure(agent_id='rec', subscribe=True)
@@ -50,6 +40,7 @@ async def main(send_client, receive_client):
         )
 
 async def chat_send(send_client):
+    """Gather and send CoAP messages in bundles."""
     BUFFER_LIMIT = 5
     TIMEOUT_SECONDS = 10
 
@@ -89,7 +80,6 @@ async def chat_send(send_client):
 
             elif command.lower() == "post":
                 resource_name = await aioconsole.ainput("Enter new resource name: ")
-
                 payload = Message(
                     code=Code.POST,
                     uri="coap://b.dtn.arpa/", # This does not actually work in the non-proxy case, because we dont use UDP
@@ -101,7 +91,6 @@ async def chat_send(send_client):
             elif command.lower() == "put":
                 resource_name = await aioconsole.ainput("Enter resource name to PUT to: ")
                 value = await aioconsole.ainput("Enter value to PUT: ")
-
                 payload = Message(
                     code=Code.PUT,
                     uri=f"coap://b.dtn.arpa/{resource_name}",
@@ -112,7 +101,6 @@ async def chat_send(send_client):
 
             elif command.lower() == "get":
                 resource_name = await aioconsole.ainput("Enter resource name to GET: ")
-
                 payload = Message(
                     code=Code.GET,
                     uri=f"coap://b.dtn.arpa/{resource_name}",
@@ -123,7 +111,6 @@ async def chat_send(send_client):
 
             elif command.lower() == "delete":
                 resource_name = await aioconsole.ainput("Enter resource name to DELETE: ")
-
                 payload = Message(
                     code=Code.DELETE,
                     uri=f"coap://b.dtn.arpa/{resource_name}",
@@ -134,7 +121,7 @@ async def chat_send(send_client):
 
             else:
                 print("Unknown command.")
-                continue  # restart loop
+                continue
 
             payload.opt.payload_length = len(payload.payload)
             payload.token = os.urandom(2)
@@ -156,6 +143,7 @@ async def chat_send(send_client):
         await send_client.disconnect()
 
 async def chat_receive(receive_client):
+    """Receive CoAP responses from DTN and print them."""
     try:
         while True:
             adu_msg, recv_payload = await receive_client.receive_adu()
@@ -173,10 +161,6 @@ async def chat_receive(receive_client):
             await receive_client.send_response_status(aap2_pb2.ResponseStatus.RESPONSE_STATUS_SUCCESS)
     finally:
         await receive_client.disconnect()
-
-# ----------------------------
-# Entry Point
-# ----------------------------
 
 if __name__ == "__main__":
     asyncio.run(main(send_client, receive_client))
