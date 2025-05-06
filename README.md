@@ -76,15 +76,6 @@ The Topology can be sen in Topology.png
 ## AUTHORS
 
 - Michael Karpov <michael.karpov@estudiantat.upc.edu> — Initial author and main developer
-- ?
-
-## CODE MODIFICATIONS
-
-This project includes modified files from the aiocoap library(https://github.com/chrysn/aiocoap), originally developed by Christian Amsüss and contributors.
-
-Modifications were made to support implement the main ideas of ietf draft "draft-gomez-core-coap-bp-03".
-
-All changes are clearly marked in the source files with inline comments "# experimental for draft-gomez-core-coap-bp-03".
 
 ## FUNDING
 
@@ -92,5 +83,28 @@ This research was funded in part by the Spanish MCIU/AEI/10.13039/501100011033/ 
 
 ## LICENSE
 
+This project incorporates code from several open source libraries and includes original code and modifications.
+
+**This Project's Code and Modifications (including modifications to aiocoap):**
+
+This code is licensed under the GNU Affero General Public License Version 3 (AGPLv3). See the `LICENSE` file in the root of this repository for the full text.
+
+This project includes modified files from the aiocoap library(https://github.com/chrysn/aiocoap), originally developed by Christian Amsüss and contributors.
+
+Modifications were made to support implement the main ideas of ietf draft "draft-gomez-core-coap-bp-03".
+
+All changes are clearly marked in the source files with inline comments "# experimental for draft-gomez-core-coap-bp-03".
+
+**aiocoap Library:**
+
+This project includes code from the aiocoap library, which is licensed under the BSD 3-Clause License. The full text of this license can be found in the `LICENSE` folder in the aiocoap library.
+
+**µD3TN Library:**
+
+This project includes code from the µD3TN library, which is licensed under the AGPLv3 License. The full text of this license can be found in the `LICENSE` file in the ud3tn library.
 
 ## ACKNOWLEDGEMENTS
+
+This work is partly based on the Bachelors Thesis of Max Lampurlanés Rosell. The work can be accessed under: https://upcommons.upc.edu/handle/2117/425606
+
+The author gratefully acknowledges Anna Calveras and Carles Gómez for their invaluable feedback and guidance during this work.
